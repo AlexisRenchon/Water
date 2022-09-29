@@ -9,7 +9,7 @@ ax = Axis(fig[1,1], xlabel = to_latex("\\theta (m^3 m^{-3})"), ylabel = "depth (
 
 #sl = Slider(fig[2, 1], range = 20000:1:53100, startvalue = 20000)
 #s = sl.value
-s = Observable(20000)
+s = Observable(19444)
 
 dots = @lift([data.SWC_43[$s], data.SWC_30cm[$s], data.SWC_50cm[$s]])
 dots_past1 = @lift([data.SWC_43[$s - 48*1], data.SWC_30cm[$s - 48*1], data.SWC_50cm[$s - 48*1]]) # 1 day
@@ -56,9 +56,9 @@ supertitle = Label(fig[0, :], test, textsize = 30, tellwidth = false, tellheight
 
 ax2 = Axis(fig[2, 1], ylabel = to_latex("\\theta (m^3 m^{-3})"), xlabel = "Month")
 
-cm15 = @lift(Point2f.(datetime2unix.(data.datetime[20000:48:$s]), data.SWC_43[20000:48:$s]))
-cm30 = @lift(Point2f.(datetime2unix.(data.datetime[20000:48:$s]), data.SWC_30cm[20000:48:$s]))
-cm50 = @lift(Point2f.(datetime2unix.(data.datetime[20000:48:$s]), data.SWC_50cm[20000:48:$s]))
+cm15 = @lift(Point2f.(datetime2unix.(data.datetime[19444:48:$s]), data.SWC_43[19444:48:$s]))
+cm30 = @lift(Point2f.(datetime2unix.(data.datetime[19444:48:$s]), data.SWC_30cm[19444:48:$s]))
+cm50 = @lift(Point2f.(datetime2unix.(data.datetime[19444:48:$s]), data.SWC_50cm[19444:48:$s]))
 
 lines!(ax2, cm15)
 lines!(ax2, cm30)
@@ -68,17 +68,31 @@ lines!(ax2, cm50)
 dateticks = collect(DateTime(2020,11,01):Month(1):DateTime(2022,09,01))
 ax2.xticks[] = (datetime2unix.(dateticks), Dates.format.(dateticks, "mm"));
 
-xlims!(ax2, datetime2unix(data.datetime[20000]), datetime2unix(data.datetime[53100]))
+xlims!(ax2, datetime2unix(data.datetime[19444]), datetime2unix(data.datetime[53100]))
 ylims!(ax2, 0, 0.5)
 
-# sum of daily precip
+
+# Calculate daily change in moisture in mm 
+
 precip = Float64[]
 datep = []
-j = 20000
-while j < size(data)[1]-48
+dcm15 = Float64[]
+dcm30 = Float64[]
+dcm50 = Float64[]
+SMchange = Float64[]
+loss = Float64[]
+j = 19444
+i = 1
+while j < 53120 
+  push!(dcm15, (data.SWC_43[j] - data.SWC_43[j-48])* 200) # 0 to 200 mm depth
+  push!(dcm30, (data.SWC_30cm[j] - data.SWC_30cm[j-48])* 200) # 200 to 400 mm
+  push!(dcm50, (data.SWC_50cm[j] - data.SWC_50cm[j-48])* 200) # 400 to 600 mm
+  push!(SMchange, dcm15[i] + dcm30[i] + dcm50[i])
   push!(precip, sum(skipmissing(data.Precip[j:j+48]))) 
   push!(datep, data.datetime[j])
+  push!(loss, -SMchange[i] + precip[i])
   j += 48
+  i += 1
 end
 
 ax3 = Axis(fig[2, 1], yaxisposition = :right, ylabel = to_latex("precip (mm day^{-1})"))
@@ -86,19 +100,26 @@ hidespines!(ax3)
 hidexdecorations!(ax3)
 
 GLMakie.barplot!(ax3, datetime2unix.(datep), precip, color = :black)
-xlims!(ax3, datetime2unix(datep[0]), datetime2unix(datep[end])) 
+xlims!(ax3, datetime2unix(datep[1]), datetime2unix(datep[end])) 
 ylims!(ax3, 0, 180)
 
 
-framerate = 10
-timestamps = 20000:48:53100
+ax4 = Axis(fig[3, 1])
 
+band!(ax4, datetime2unix.(datep), zeros(length(datep)), precip, color = :blue) 
+band!(ax4, datetime2unix.(datep), zeros(length(datep)), -loss, color = :red)
+band!(ax4, datetime2unix.(datep), zeros(length(datep)), SMchange, color = :black)
+
+dateticks = collect(DateTime(2020,11,01):Month(1):DateTime(2022,09,01))
+ax4.xticks[] = (datetime2unix.(dateticks), Dates.format.(dateticks, "mm"));
+
+xlims!(ax4, datetime2unix(datep[1]), datetime2unix(datep[end]))
+ylims!(ax4, -50, 50)
+
+framerate = 10
+timestamps = 19444:48:53100
 record(fig, joinpath("output", "time_animation.mp4"), timestamps;
         framerate = framerate) do t
     s[] = t
 end
-
-
-
-
 
